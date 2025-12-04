@@ -18,14 +18,14 @@
 using namespace ns3;
 using namespace std;
 
-NS_LOG_COMPONENT_DEFINE("POSITRON");
+NS_LOG_COMPONENT_DEFINE("NEUTRON");
 
 int main(int argc, char *argv[])
 {
 
   bool logging = false;
   bool tracing = false;
-  bool balanced = false;
+  bool balanced = true;
   bool powerless = true;
   uint32_t loss = 20;
   uint32_t seed = 42;
@@ -46,7 +46,6 @@ int main(int argc, char *argv[])
   {
     LogComponentEnable("Database", LOG_LEVEL_INFO);
     LogComponentEnable("Controller", LOG_LEVEL_INFO);
-    LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
   }
 
   cout << "Carregando YAML de entrada..." << endl;
@@ -85,10 +84,6 @@ int main(int argc, char *argv[])
       cout << "  - Transmission: " << transmission << " Mbps" << endl;
       cout << "  - Storage: " << storage << " GB" << endl;
 
-      int count = 0;
-      float factor = (float)loss / 100;
-      int losspercent = nodeQtd * factor;
-
       for (int i = 0; i < nodeQtd; i++)
       {
         Ptr<CustomNode> node = CreateObject<CustomNode>();
@@ -100,11 +95,8 @@ int main(int argc, char *argv[])
         node->SetAttribute("Memory", DoubleValue(memory));
         node->SetAttribute("Transmission", DoubleValue(transmission));
         node->SetAttribute("Storage", DoubleValue(storage));
-        count += 1;
-        if (powerless && count <= losspercent) {
-          node->SetAttribute("InitialConsumption", DoubleValue(0.001157407));
-          node->SetAttribute("CurrentConsumption", DoubleValue(0.001157407));
-        }
+        node->SetAttribute("InitialConsumption", DoubleValue(0.001157407));
+        node->SetAttribute("CurrentConsumption", DoubleValue(0.001157407));
 
         workerNodes.Add(node);
 
@@ -161,7 +153,6 @@ int main(int argc, char *argv[])
 
   for (std::size_t i = 0; i < apps.size(); i++)
   {
-
     std::string policy = apps[i]["policy"].as<std::string>();
     float cpu = apps[i]["cpu"].as<float>();
     float memory = apps[i]["memory"].as<float>();

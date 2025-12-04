@@ -1,0 +1,8 @@
+-- usage: POSITRON_FOLDER $ sqlite3 scratch/database.db < experiments/workers_applications.sql
+
+.headers on
+.mode column
+
+select ID_APPLICATION, ID_WORKER, PERFORMED_AT, FINISHED_AT 
+from WORKERS_APPLICATIONS
+order by ID_APPLICATION;

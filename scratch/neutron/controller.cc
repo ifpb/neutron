@@ -87,12 +87,12 @@ void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
         node->AttPower();
         db.UpdateNodeResources(i, node->GetPower());
     }
-    double avgPower = db.HibridPolicy();
-    if (avgPower > 50.0) {
-        m_balanced = false;
-    } else {
-        m_balanced = true;
-    }
+    //double avgPower = db.HibridPolicy();
+    //if (avgPower > 50.0) {
+    //    m_balanced = false;
+    //} else {
+    //    m_balanced = true;
+    //}
     WRK worker = db.SelectWorker(application.CPU, application.MEMORY, application.STORAGE, application.POLICY, m_balanced);
     if (worker.ID > 0 && worker.ID < static_cast<int>(controlNodes.GetN())) {
 
@@ -126,6 +126,7 @@ void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
         std::cout << "allocate_worker_application called in worker " << worker.ID << " and application " << application.ID << std::endl;
     }
     else {
+        std::cout << "Application with ID " << application.ID << " cannot be allocated " << std::endl;
         double currentTime = ns3::Simulator::Now().GetSeconds();
         db.MarkApplicationStatus(application.ID, "3", currentTime);  // Marcando com 3 para sinalizar que precisará rodar novamente
     }
@@ -151,12 +152,6 @@ void Controller::DeallocateApp(int idApplication, int idWorker, NodeContainer co
     }
     db.RemoveWorkerApplication(idWorker, idApplication, currentTime);
     db.MarkApplicationStatus(idApplication, finish, currentTime);
-
-    std::vector<int> appIds = db.GetApplicationsToReallocate();
-    for (int appId : appIds)
-    {
-        AllocateApp(appId, controlNodes);
-    }
 }
 
 void Controller::OutOfPower(int idWorker, NodeContainer controlNodes)
@@ -172,14 +167,13 @@ void Controller::OutOfPower(int idWorker, NodeContainer controlNodes)
         db.RemoveWorkerApplication(idWorker, appId, currentTime);
         db.MarkApplicationStatus(appId, "3", currentTime); // Marcando com 3 para sinalizar que precisará rodar novamente
     }
-
-    std::vector<int> appIds = db.GetApplicationsToReallocate();
-    for (int appId : appIds)
-    {
-        AllocateApp(appId, controlNodes);
-    }
     
-    //RechargePower(idWorker, controlNodes);
+    Simulator::Schedule(
+            Minutes(5.0),
+            &Controller::RechargePower,
+            this,
+            idWorker, 
+            controlNodes);
 
     std::cout << "Node with ID " << idWorker << " ran out of power at " << currentTime << "s and all applications were removed." << std::endl;
 }
@@ -188,14 +182,14 @@ void Controller::RechargePower(int idWorker, NodeContainer controlNodes)
 {
     Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(idWorker));
     node->SetPower(100.0);
-
-    //std::vector<int> appIds = db.GetApplicationsToReallocate();
-    //for (int appId : appIds)
-    //{
-    //    AllocateApp(appId, controlNodes);
-    //}
-
     std::cout << "Node with ID " << idWorker << " was recharged at " << ns3::Simulator::Now().GetSeconds() << "s and power set to 100." << std::endl;
+
+    std::vector<int> appIds = db.GetApplicationsToReallocate();
+    for (int appId : appIds)
+    {
+        std::cout << "Application with ID " << appId << " will be reallocated " << std::endl;
+        AllocateApp(appId, controlNodes);
+    }
 }
 
 void Controller::ResetDatabase()
