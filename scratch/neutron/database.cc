@@ -46,12 +46,18 @@ void Database::AddNodeToDatabase(double power, double initial_consumption, doubl
     }
 }
 
-void Database::UpdateNodeResources(int workerId, double updatedPower)
+void Database::UpdateNodeResources(WRK worker)
 {
     std::ostringstream oss;
     oss << "UPDATE WORKERS SET "
-        << "POWER = " << updatedPower
-        << " WHERE ID = " << workerId << ";";
+        << "POWER = " << worker.POWER << ", "
+        << "INITIAL_CONSUMPTION = " << worker.INITIAL_CONSUMPTION << ", "
+        << "CURRENT_CONSUMPTION = " << worker.CURRENT_CONSUMPTION << ", "
+        << "CPU = " << worker.CPU << ", "
+        << "MEMORY = " << worker.MEMORY << ", "
+        << "TRANSMISSION = " << worker.TRANSMISSION << ", "
+        << "STORAGE = " << worker.STORAGE
+        << " WHERE ID = " << worker.ID << ";";
 
     ExecuteQuery(oss.str());
 }
@@ -108,58 +114,16 @@ APP Database::SelectApplicationById(int id)
     return application;
 }
 
-WRK Database::SelectWorker(float cpu, float memory, float storage, const char *policy, bool balanced)
+WRK Database::SelectWorkerById(int id)
 {
+    WRK worker;
+
     std::ostringstream oss;
-    oss << "WITH FILTERED_WORKERS AS ("
-        << "SELECT "
-        << "WORKERS.ID AS worker, "
-        << "WORKERS.POWER AS battery, "
-        << "WORKERS.INITIAL_CONSUMPTION AS initial_consumption, "
-        << "WORKERS.CURRENT_CONSUMPTION + (COUNT(APPLICATIONS.ID) * WORKERS.INITIAL_CONSUMPTION) AS current_consumption, "
-        << "WORKERS.CPU - COALESCE(SUM(APPLICATIONS.CPU), 0) AS cpu_remaining, "
-        << "WORKERS.MEMORY - COALESCE(SUM(APPLICATIONS.MEMORY), 0) AS memory_remaining, "
-        << "WORKERS.TRANSMISSION AS transmission, "
-        << "WORKERS.STORAGE - COALESCE(SUM(APPLICATIONS.STORAGE), 0) AS storage_remaining, "
-        << "COUNT(APPLICATIONS.ID) AS application_quantity "
-        << "FROM WORKERS "
-        << "LEFT JOIN WORKERS_APPLICATIONS ON WORKERS_APPLICATIONS.ID_WORKER = WORKERS.ID "
-        << "LEFT JOIN APPLICATIONS ON APPLICATIONS.ID = WORKERS_APPLICATIONS.ID_APPLICATION AND APPLICATIONS.FINISH = 2 "
-        << "GROUP BY WORKERS.ID"
-        << ") "
-        << "SELECT * FROM FILTERED_WORKERS "
-        << "WHERE "
-        << "cpu_remaining >= " << cpu << " AND "
-        << "memory_remaining >= " << memory << " AND "
-        << "storage_remaining >= " << storage << " AND "
-        << "battery > 50 "
-        << "ORDER BY ";
-
-    if (balanced)
-    {
-        oss << "application_quantity ASC, ";
-    }
-
-    if (strcmp(policy, "performance") == 0)
-    {
-        oss << "cpu_remaining DESC ";
-    }
-    else if (strcmp(policy, "storage") == 0)
-    {
-        oss << "storage_remaining DESC ";
-    }
-    else if (strcmp(policy, "transmission") == 0)
-    {
-        oss << "transmission DESC ";
-    }
-
-    oss << "LIMIT 1;";
+    oss << "SELECT * FROM WORKERS WHERE ID = " << id << ";";
 
     sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
 
-    //std::cout << oss.str().c_str() << std::endl;
-
-    WRK worker = {0};
     if (sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr) == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW)
     {
         worker.ID = sqlite3_column_int(stmt, 0);
@@ -170,19 +134,10 @@ WRK Database::SelectWorker(float cpu, float memory, float storage, const char *p
         worker.MEMORY = static_cast<float>(sqlite3_column_double(stmt, 5));
         worker.TRANSMISSION = static_cast<float>(sqlite3_column_double(stmt, 6));
         worker.STORAGE = static_cast<float>(sqlite3_column_double(stmt, 7));
-
-        std::cout << "Worker Found:\n"
-                  << "  ID: " << worker.ID << "\n"
-                  << "  Power: " << worker.POWER << "\n"
-                  << "  Initial Consumption: " << worker.INITIAL_CONSUMPTION << "\n"
-                  << "  Current Consumption: " << worker.CURRENT_CONSUMPTION << "\n"
-                  << "  CPU: " << worker.CPU << "\n"
-                  << "  Memory: " << worker.MEMORY << "\n"
-                  << "  Transmission: " << worker.TRANSMISSION << "\n"
-                  << "  Storage: " << worker.STORAGE << "\n";
     }
 
     sqlite3_finalize(stmt);
+
     return worker;
 }
 

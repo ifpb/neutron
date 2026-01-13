@@ -83,9 +83,9 @@ void CustomNode::AddApplication(int appId, double cpu, double mem, double storag
     m_applications.push_back(appId);
     AttPower();
     m_currentConsumption += m_initialConsumption;
-    //m_cpu -= cpu;
-    //m_memory -= mem;
-    //m_storage -= storage;
+    m_cpu -= cpu;
+    m_memory -= mem;
+    m_storage -= storage;
 
     std::cout << "At time " << std::to_string(currentTime).substr(0, std::to_string(currentTime).find(".") + 2) << "s: ";
     std::cout << "AddApplication called at CustomNode " << this->GetId() << std::endl;
@@ -105,9 +105,9 @@ void CustomNode::RemoveApplication(int appId, double cpu, double mem, double sto
     m_applications.erase(it);
     AttPower();
     m_currentConsumption -= m_initialConsumption;
-    //m_cpu += cpu;
-    //m_memory += mem;
-    //m_storage += storage;
+    m_cpu += cpu;
+    m_memory += mem;
+    m_storage += storage;
 
     std::cout << "At time " << std::to_string(currentTime).substr(0, std::to_string(currentTime).find(".") + 2) << "s: ";
     std::cout << "RemoveApplication called at node " << this->GetId() << std::endl;

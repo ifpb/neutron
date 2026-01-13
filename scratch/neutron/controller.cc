@@ -80,56 +80,106 @@ void Controller::AddApp(std::string policy, float start, float duration, double 
 
 void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
 {
-    APP application = db.SelectApplicationById(app_id); 
+    APP application = db.SelectApplicationById(app_id);
+    std::vector<uint32_t> candidateNodes;
     for (uint32_t i = 1; i < controlNodes.GetN(); ++i)
     {
         Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(i));
+        WRK worker = db.SelectWorkerById(node->GetId());
         node->AttPower();
-        db.UpdateNodeResources(i, node->GetPower());
-    }
-    //double avgPower = db.HibridPolicy();
-    //if (avgPower > 50.0) {
-    //    m_balanced = false;
-    //} else {
-    //    m_balanced = true;
-    //}
-    WRK worker = db.SelectWorker(application.CPU, application.MEMORY, application.STORAGE, application.POLICY, m_balanced);
-    if (worker.ID > 0 && worker.ID < static_cast<int>(controlNodes.GetN())) {
+        worker.POWER = node->GetPower();
+        worker.CPU = node->GetCPU();
+        worker.MEMORY = node->GetMemory();
+        worker.STORAGE = node->GetStorage();
+        db.UpdateNodeResources(worker);
 
-        double currentTime = ns3::Simulator::Now().GetSeconds();
-        db.InsertWorkerApplication(worker.ID, application.ID, currentTime);
-        db.MarkApplicationStatus(application.ID, "2", currentTime); // Marcando com 2 para sinalizar que está running
-        Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(worker.ID));
-        node->AddApplication(application.ID, application.CPU, application.MEMORY, application.STORAGE);
-        if (node->GetCurrentConsumption() > 0.0)
-        {
-            Simulator::Cancel(finishWkrBattery[worker.ID]);
-            double duration = node->GetPower() / node->GetCurrentConsumption();
-            finishWkrBattery[worker.ID] = ns3::Simulator::Schedule(
-                ns3::Seconds(duration),
-                &Controller::OutOfPower,
-                this,
-                worker.ID,
-                controlNodes
-            );
+        if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0) && (worker.POWER > (worker.CURRENT_CONSUMPTION+worker.INITIAL_CONSUMPTION) * application.DURATION)){
+            candidateNodes.push_back(worker.ID);
         }
-        finishIDApp[application.ID] = Simulator::Schedule(
-            Seconds(application.DURATION),
-            &Controller::DeallocateApp,
-            this,
-            application.ID, 
-            worker.ID,
-            controlNodes,
-            "1"); // Marcando com 1 para sinalizar que finalizou
-        
-        std::cout << "At time " << std::to_string(currentTime).substr(0, std::to_string(currentTime).find(".") + 2) << "s: ";
-        std::cout << "allocate_worker_application called in worker " << worker.ID << " and application " << application.ID << std::endl;
     }
-    else {
+
+    double currentTime = ns3::Simulator::Now().GetSeconds();
+    if (candidateNodes.empty()) {
         std::cout << "Application with ID " << application.ID << " cannot be allocated " << std::endl;
-        double currentTime = ns3::Simulator::Now().GetSeconds();
-        db.MarkApplicationStatus(application.ID, "3", currentTime);  // Marcando com 3 para sinalizar que precisará rodar novamente
+        db.MarkApplicationStatus(application.ID, "3", currentTime);
+        return;
     }
+
+    uint32_t selectedNodeId = UINT32_MAX;
+    double maxPower = -1.0;
+
+    for (uint32_t nodeId : candidateNodes)
+    {
+        WRK worker = db.SelectWorkerById(nodeId);
+        std::cout << "Worker Candidate:\n"
+                  << "  ID: " << worker.ID << "\n"
+                  << "  Power: " << worker.POWER << "\n"
+                  << "  Initial Consumption: " << worker.INITIAL_CONSUMPTION << "\n"
+                  << "  Current Consumption: " << worker.CURRENT_CONSUMPTION << "\n"
+                  << "  CPU: " << worker.CPU << "\n"
+                  << "  Memory: " << worker.MEMORY << "\n"
+                  << "  Transmission: " << worker.TRANSMISSION << "\n"
+                  << "  Storage: " << worker.STORAGE << "\n";
+
+        if (worker.POWER > maxPower)
+        {
+            maxPower = worker.POWER;
+            selectedNodeId = nodeId;
+        }
+    }
+
+    if (selectedNodeId == UINT32_MAX) {
+        std::cout << "Application with ID " << application.ID << " cannot be allocated " << std::endl;
+        db.MarkApplicationStatus(application.ID, "3", currentTime);
+        return;
+    }
+
+    WRK worker = db.SelectWorkerById(selectedNodeId);
+    std::cout << "Worker Selected:\n"
+                  << "  ID: " << worker.ID << "\n"
+                  << "  Power: " << worker.POWER << "\n"
+                  << "  Initial Consumption: " << worker.INITIAL_CONSUMPTION << "\n"
+                  << "  Current Consumption: " << worker.CURRENT_CONSUMPTION << "\n"
+                  << "  CPU: " << worker.CPU << "\n"
+                  << "  Memory: " << worker.MEMORY << "\n"
+                  << "  Transmission: " << worker.TRANSMISSION << "\n"
+                  << "  Storage: " << worker.STORAGE << "\n";
+
+    db.InsertWorkerApplication(worker.ID, application.ID, currentTime);
+    db.MarkApplicationStatus(application.ID, "2", currentTime); // Marcando com 2 para sinalizar que está running
+
+    Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(worker.ID));
+    node->AddApplication(application.ID, application.CPU, application.MEMORY, application.STORAGE);
+    worker.CPU = node->GetCPU();
+    worker.MEMORY = node->GetMemory();
+    worker.STORAGE = node->GetStorage();
+    worker.CURRENT_CONSUMPTION = node->GetCurrentConsumption();
+    db.UpdateNodeResources(worker);
+
+    if (node->GetCurrentConsumption() > 0.0)
+    {
+        Simulator::Cancel(finishWkrBattery[worker.ID]);
+        double duration = node->GetPower() / node->GetCurrentConsumption();
+        finishWkrBattery[worker.ID] = ns3::Simulator::Schedule(
+            ns3::Seconds(duration),
+            &Controller::OutOfPower,
+            this,
+            worker.ID,
+            controlNodes
+        );
+    }
+    finishIDApp[application.ID] = Simulator::Schedule(
+        Seconds(application.DURATION),
+        &Controller::DeallocateApp,
+        this,
+        application.ID, 
+        worker.ID,
+        controlNodes,
+        "1"); // Marcando com 1 para sinalizar que finalizou
+    
+    std::cout << "At time " << std::to_string(currentTime).substr(0, std::to_string(currentTime).find(".") + 2) << "s: ";
+    std::cout << "allocate_worker_application called in worker " << worker.ID << " and application " << application.ID << std::endl;
+
 }
 
 void Controller::DeallocateApp(int idApplication, int idWorker, NodeContainer controlNodes, std::string finish)
@@ -137,7 +187,15 @@ void Controller::DeallocateApp(int idApplication, int idWorker, NodeContainer co
     double currentTime = ns3::Simulator::Now().GetSeconds();
     Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(idWorker));
     APP application = db.SelectApplicationById(idApplication); 
+
     node->RemoveApplication(application.ID, application.CPU, application.MEMORY, application.STORAGE);
+    WRK worker = db.SelectWorkerById(node->GetId());
+    worker.CPU = node->GetCPU();
+    worker.MEMORY = node->GetMemory();
+    worker.STORAGE = node->GetStorage();
+    worker.CURRENT_CONSUMPTION = node->GetCurrentConsumption();
+    db.UpdateNodeResources(worker);
+
     if (node->GetCurrentConsumption() > 0.0)
     {
         Simulator::Cancel(finishWkrBattery[idWorker]);
@@ -163,17 +221,16 @@ void Controller::OutOfPower(int idWorker, NodeContainer controlNodes)
     {
         APP application = db.SelectApplicationById(appId); 
         node->RemoveApplication(application.ID, application.CPU, application.MEMORY, application.STORAGE);
+        WRK worker = db.SelectWorkerById(node->GetId());
+        worker.CPU = node->GetCPU();
+        worker.MEMORY = node->GetMemory();
+        worker.STORAGE = node->GetStorage();
+        worker.CURRENT_CONSUMPTION = node->GetCurrentConsumption();
+        db.UpdateNodeResources(worker);
         Simulator::Cancel(finishIDApp[appId]);
         db.RemoveWorkerApplication(idWorker, appId, currentTime);
         db.MarkApplicationStatus(appId, "3", currentTime); // Marcando com 3 para sinalizar que precisará rodar novamente
     }
-    
-    Simulator::Schedule(
-            Minutes(5.0),
-            &Controller::RechargePower,
-            this,
-            idWorker, 
-            controlNodes);
 
     std::cout << "Node with ID " << idWorker << " ran out of power at " << currentTime << "s and all applications were removed." << std::endl;
 }
@@ -182,8 +239,11 @@ void Controller::RechargePower(int idWorker, NodeContainer controlNodes)
 {
     Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(idWorker));
     node->SetPower(100.0);
+    WRK worker = db.SelectWorkerById(node->GetId());
+    worker.CURRENT_CONSUMPTION = node->GetInitialConsumption();
+    worker.POWER = node->GetPower();
+    db.UpdateNodeResources(worker);
     std::cout << "Node with ID " << idWorker << " was recharged at " << ns3::Simulator::Now().GetSeconds() << "s and power set to 100." << std::endl;
-
     std::vector<int> appIds = db.GetApplicationsToReallocate();
     for (int appId : appIds)
     {

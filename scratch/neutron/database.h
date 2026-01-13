@@ -11,7 +11,7 @@ public:
     ~Database();
     bool ExecuteQuery(const std::string &query);
     void AddNodeToDatabase(double power, double initial_consumption, double current_consumption, double cpu, double memory, double transmission, double storage, std::string node_name);
-    void UpdateNodeResources(int workerId, double updatedPower);
+    void UpdateNodeResources(WRK worker);
     void AddAppToDatabase(double currentTime, std::string policy, float start, float duration, double cpu, double memory, double storage);
     void InsertWorkerApplication(int idWorker, int idApplication, double performedAt);
     void RemoveWorkerApplication(int idWorker, int idApplication, double currentTime);
@@ -21,7 +21,7 @@ public:
     void CreateAllTables();
     std::vector<int> GetApplicationsToReallocate();
     APP SelectApplicationById(int id);
-    WRK SelectWorker(float cpu, float memory, float storage, const char *policy, bool balanced);
+    WRK SelectWorkerById(int id);
 
 private:
     sqlite3 *db;
