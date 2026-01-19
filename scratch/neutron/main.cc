@@ -95,8 +95,8 @@ int main(int argc, char *argv[])
         node->SetAttribute("Memory", DoubleValue(memory));
         node->SetAttribute("Transmission", DoubleValue(transmission));
         node->SetAttribute("Storage", DoubleValue(storage));
-        node->SetAttribute("InitialConsumption", DoubleValue(0.00016534391));
-        node->SetAttribute("CurrentConsumption", DoubleValue(0.00016534391));
+        node->SetAttribute("InitialConsumption", DoubleValue(0.00023148148));
+        node->SetAttribute("CurrentConsumption", DoubleValue(0.00023148148));
 
         workerNodes.Add(node);
 
