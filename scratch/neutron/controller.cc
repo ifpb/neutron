@@ -81,6 +81,13 @@ void Controller::AddApp(std::string policy, float start, float duration, double 
 void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
 {
     APP application = db.SelectApplicationById(app_id);
+    std::cout << "Application to be allocated:\n"
+                  << "  ID: " << application.ID << "\n"
+                  << "  Duration: " << application.DURATION << "\n"
+                  << "  CPU: " << application.CPU << "\n"
+                  << "  Memory: " << application.MEMORY << "\n"
+                  << "  Storage: " << application.STORAGE << "\n"
+                  << "  Policy: " << application.POLICY << "\n";
     std::vector<uint32_t> candidateNodes;
     for (uint32_t i = 1; i < controlNodes.GetN(); ++i)
     {
@@ -93,7 +100,7 @@ void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
         worker.STORAGE = node->GetStorage();
         db.UpdateNodeResources(worker);
 
-        if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0) && (worker.POWER > (worker.CURRENT_CONSUMPTION+worker.INITIAL_CONSUMPTION) * application.DURATION)){
+        if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0)){
             candidateNodes.push_back(worker.ID);
         }
     }
@@ -101,12 +108,33 @@ void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
     double currentTime = ns3::Simulator::Now().GetSeconds();
     if (candidateNodes.empty()) {
         std::cout << "Application with ID " << application.ID << " cannot be allocated " << std::endl;
-        db.MarkApplicationStatus(application.ID, "3", currentTime);
+        db.MarkApplicationStatus(application.ID, "3", currentTime); // Marcando com 3 para sinalizar que ainda precisa ser alocada
         return;
     }
 
-    uint32_t selectedNodeId = UINT32_MAX;
-    double maxPower = -1.0;
+    std::sort(candidateNodes.begin(), candidateNodes.end(),
+    [&](uint32_t a, uint32_t b)
+    {
+        WRK wa = db.SelectWorkerById(a);
+        WRK wb = db.SelectWorkerById(b);
+
+        if (m_balanced)
+        {
+            if (wa.APPS.size() != wb.APPS.size())
+                return wa.APPS.size() < wb.APPS.size();
+        }
+
+        if (strcmp(application.POLICY, "performance") == 0)
+            return wa.CPU > wb.CPU;
+
+        if (strcmp(application.POLICY, "storage") == 0)
+            return wa.STORAGE > wb.STORAGE;
+
+        if (strcmp(application.POLICY, "transmission") == 0)
+            return wa.TRANSMISSION > wb.TRANSMISSION;
+
+        return false;
+    });
 
     for (uint32_t nodeId : candidateNodes)
     {
@@ -120,20 +148,9 @@ void Controller::AllocateApp(int app_id, NodeContainer controlNodes)
                   << "  Memory: " << worker.MEMORY << "\n"
                   << "  Transmission: " << worker.TRANSMISSION << "\n"
                   << "  Storage: " << worker.STORAGE << "\n";
-
-        if (worker.POWER > maxPower)
-        {
-            maxPower = worker.POWER;
-            selectedNodeId = nodeId;
-        }
     }
 
-    if (selectedNodeId == UINT32_MAX) {
-        std::cout << "Application with ID " << application.ID << " cannot be allocated " << std::endl;
-        db.MarkApplicationStatus(application.ID, "3", currentTime);
-        return;
-    }
-
+    uint32_t selectedNodeId = candidateNodes.front();
     WRK worker = db.SelectWorkerById(selectedNodeId);
     std::cout << "Worker Selected:\n"
                   << "  ID: " << worker.ID << "\n"
@@ -215,6 +232,7 @@ void Controller::DeallocateApp(int idApplication, int idWorker, NodeContainer co
 void Controller::OutOfPower(int idWorker, NodeContainer controlNodes)
 {
     double currentTime = ns3::Simulator::Now().GetSeconds();
+    std::cout << "Node with ID " << idWorker << " ran out of power at " << currentTime << "s and all applications will be removed." << std::endl;
     Ptr<CustomNode> node = DynamicCast<CustomNode>(controlNodes.Get(idWorker));
     std::vector<int> activeApps = node->GetApplications();
     for (int appId : activeApps)
@@ -229,10 +247,8 @@ void Controller::OutOfPower(int idWorker, NodeContainer controlNodes)
         db.UpdateNodeResources(worker);
         Simulator::Cancel(finishIDApp[appId]);
         db.RemoveWorkerApplication(idWorker, appId, currentTime);
-        db.MarkApplicationStatus(appId, "3", currentTime); // Marcando com 3 para sinalizar que precisará rodar novamente
+        db.MarkApplicationStatus(appId, "3", currentTime); // Marcando com 3 para sinalizar que ainda precisa ser alocada
     }
-
-    std::cout << "Node with ID " << idWorker << " ran out of power at " << currentTime << "s and all applications were removed." << std::endl;
 }
 
 void Controller::RechargePower(int idWorker, NodeContainer controlNodes)
