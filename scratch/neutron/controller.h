@@ -26,10 +26,12 @@ public:
     void SetOptions(bool balanced);
     void AddWorkers(NodeContainer workerNodes);
     void AddApp(std::string policy, float start, float duration, double cpu, double memory, double storage);
-    void AllocateApp(int app_id, NodeContainer workerNodes);
-    void DeallocateApp(int idApplication,int idWorker, NodeContainer controlNodes, std::string finish);
-    void OutOfPower(int idWorker, NodeContainer controlNodes);
-    void RechargePower(int idWorker, NodeContainer controlNodes);
+    void AllocateApp(int app_id);
+    void DeallocateApp(int idApplication,int idWorker, std::string finish);
+    void OutOfPower(int idWorker);
+    void RechargePower(int idWorker);
+    void BatteryMonitoringTask();
+    WRK BuildWorkerFromNode(int idWorker);
     void ResetDatabase();
 
 private:
@@ -39,6 +41,7 @@ private:
     ns3::EventId finishIDApp[100000];
     ns3::EventId finishWkrBattery[100000];
     bool m_balanced;
+    NodeContainer m_controlNodes;
 };
 
 } // namespace ns3

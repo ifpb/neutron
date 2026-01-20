@@ -1,5 +1,3 @@
--- usage: POSITRON_FOLDER $ sqlite3 scratch/database.db < experiments/workers_applications.sql
-
 .headers on
 .mode column
 

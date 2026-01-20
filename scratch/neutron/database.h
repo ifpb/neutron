@@ -16,6 +16,7 @@ public:
     void InsertWorkerApplication(int idWorker, int idApplication, double performedAt);
     void RemoveWorkerApplication(int idWorker, int idApplication, double currentTime);
     void MarkApplicationStatus(int appId, std::string status, double currentTime);
+    void InsertBatteryMonitoring(double currentTime);
     double HibridPolicy();
     void DropAllTables();
     void CreateAllTables();

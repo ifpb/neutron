@@ -211,6 +211,31 @@ void Database::MarkApplicationStatus(int appId, std::string status, double curre
     }
 }
 
+void Database::InsertBatteryMonitoring(double currentTime)
+{
+    const char* sql_avg = R"(
+        SELECT AVG(POWER) FROM WORKERS;
+    )";
+
+    sqlite3_stmt* stmt;
+    double avgPower = 0.0;
+
+    if (sqlite3_prepare_v2(db, sql_avg, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            avgPower = sqlite3_column_double(stmt, 0);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+
+    std::ostringstream oss;
+    oss << "INSERT INTO BATTERY_MONITORING (TIMESTAMP, AVG_POWER) VALUES (" << currentTime << ", " << avgPower << ");";
+
+    ExecuteQuery(oss.str().c_str());
+}
+
 bool Database::ExecuteQuery(const std::string &query) {
     char *errMsg = nullptr;
     if (sqlite3_exec(db, query.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
@@ -264,6 +289,15 @@ void Database::CreateAllTables()
         );
     )";
     ExecuteQuery(sql_workers_applications);
+
+    const char* sql_battery_monitoring = R"(
+        CREATE TABLE BATTERY_MONITORING (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            TIMESTAMP FLOAT NOT NULL,
+            AVG_POWER FLOAT NOT NULL
+        );
+    )";
+    ExecuteQuery(sql_battery_monitoring);
 }
 
 void Database::DropAllTables()
@@ -271,7 +305,8 @@ void Database::DropAllTables()
     const char sql[] =
         "DROP TABLE IF EXISTS WORKERS;"
         "DROP TABLE IF EXISTS APPLICATIONS;"
-        "DROP TABLE IF EXISTS WORKERS_APPLICATIONS;";
+        "DROP TABLE IF EXISTS WORKERS_APPLICATIONS;"
+        "DROP TABLE IF EXISTS BATTERY_MONITORING;";
 
     if (ExecuteQuery(sql))
     {

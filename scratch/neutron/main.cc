@@ -26,16 +26,12 @@ int main(int argc, char *argv[])
   bool logging = false;
   bool tracing = false;
   bool balanced = true;
-  bool powerless = true;
-  uint32_t loss = 20;
   uint32_t seed = 42;
 
   CommandLine cmd(__FILE__);
   cmd.AddValue("logging", "Tell control applications to logging if true", logging);
   cmd.AddValue("tracing", "Tell control applications to tracing if true", tracing);
   cmd.AddValue("balanced", "Tell control whether is a balanced policy", balanced);
-  cmd.AddValue("powerless", "Set simulation scenario with battery loss", powerless);
-  cmd.AddValue("loss", "Set simulation battery loss percentage", loss);
   cmd.AddValue("seed", "Set seed as an input parameter", seed);
 
   cmd.Parse(argc, argv);
@@ -180,8 +176,10 @@ int main(int argc, char *argv[])
     controller->AddApp(policy, start, duration, cpu, memory, storage);
     
     // Mandando controlNodes para que seja tratado sincronizado com os ids do banco que começam do 1 ao invés do 0
-    Simulator::Schedule(Seconds(start), &Controller::AllocateApp, controller, app_id, controlNodes);
+    Simulator::Schedule(Seconds(start), &Controller::AllocateApp, controller, app_id);
   }
+
+  Simulator::Schedule(Seconds(3600), &Controller::BatteryMonitoringTask, controller);
 
   Simulator::Run();
   Simulator::Destroy();
