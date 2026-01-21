@@ -89,10 +89,12 @@ void Controller::AllocateApp(int app_id)
                   << "  Storage: " << application.STORAGE << "\n"
                   << "  Policy: " << application.POLICY << "\n";
     std::vector<uint32_t> candidateNodes;
+    double avgPower = 0.0;
     for (uint32_t i = 1; i < m_controlNodes.GetN(); ++i)
     {
         Ptr<CustomNode> node = DynamicCast<CustomNode>(m_controlNodes.Get(i));
         WRK worker = BuildWorkerFromNode(i);
+        avgPower += worker.POWER;
         if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0)){
             candidateNodes.push_back(worker.ID);
         }
@@ -103,6 +105,10 @@ void Controller::AllocateApp(int app_id)
         std::cout << "Application with ID " << application.ID << " cannot be allocated " << std::endl;
         db.MarkApplicationStatus(application.ID, "3", currentTime); // Marcando com 3 para sinalizar que ainda precisa ser alocada
         return;
+    }
+
+    if (avgPower / m_controlNodes.GetN() - 1 < 50) {
+        m_balanced = true;
     }
 
     std::sort(candidateNodes.begin(), candidateNodes.end(),
