@@ -4,42 +4,19 @@
 
 using namespace ns3;
 
-Controller::Controller() {
-    m_socket = nullptr;
-}
+Controller::Controller() = default;
+Controller::~Controller() = default;
 
-Controller::~Controller() {
-    if (m_socket) {
-        m_socket->Close();
-    }
-}
-
-void Controller::StartApplication() {
-    m_socket = Socket::CreateSocket(GetNode(), TypeId::LookupByName("ns3::UdpSocketFactory"));
-    m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(),9));
-    m_socket->SetRecvCallback(MakeCallback(&Controller::ReceiveMessageFromWorker, this));
-}
-
-void Controller::StopApplication() {
-    if (m_socket) {
-        m_socket->Close();
-    }
-}
-
-void Controller::SendMessageToWorker(Ipv4Address address) {
-    Ptr<Packet> packet = Create<Packet>(1024);
-    std::cout << "Controller enviando mensagem para: " << address << std::endl;
-    m_socket->SendTo(packet, 0, InetSocketAddress(address, 7));
-}
-
-void Controller::ReceiveMessageFromWorker(Ptr<Socket> socket) {
-    Ptr<Packet> packet = socket->Recv();
-    std::cout << "Controller recebeu um pacote de um worker!" << std::endl;
-}
-
-void Controller::SetOptions(bool balanced)
+void Controller::SetOptions(std::string method)
 {
-    m_balanced = balanced;
+    m_method = method;
+    if (m_method == "bal"){
+        m_balanced = true;
+    }
+    else if (m_method == "hib" || m_method == "sat")
+    {
+        m_balanced = false;
+    }
 }
 
 void Controller::AddWorkers(NodeContainer controlNodes)
@@ -89,12 +66,12 @@ void Controller::AllocateApp(int app_id)
                   << "  Storage: " << application.STORAGE << "\n"
                   << "  Policy: " << application.POLICY << "\n";
     std::vector<uint32_t> candidateNodes;
-    double avgPower = 0.0;
+    double totalPower = 0.0;
     for (uint32_t i = 1; i < m_controlNodes.GetN(); ++i)
     {
         Ptr<CustomNode> node = DynamicCast<CustomNode>(m_controlNodes.Get(i));
         WRK worker = BuildWorkerFromNode(i);
-        avgPower += worker.POWER;
+        totalPower += worker.POWER;
         if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0)){
             candidateNodes.push_back(worker.ID);
         }
@@ -107,8 +84,19 @@ void Controller::AllocateApp(int app_id)
         return;
     }
 
-    if (avgPower / m_controlNodes.GetN() - 1 < 50) {
-        m_balanced = true;
+    if (m_method == "hib") {
+        double avgBattery = totalPower / (m_controlNodes.GetN() - 1);
+
+        if (avgBattery < 60)
+        {
+            m_balanced = true;
+        }
+        else
+        {
+            m_balanced = false;
+        }
+
+        std::cout << "[Controller] Método=Hibrido | " << "Bateria média=" << avgBattery << "% | " << "Modo=" << (m_balanced ? "Balanceado" : "Saturado") << "at " << currentTime << "s" << std::endl;
     }
 
     std::sort(candidateNodes.begin(), candidateNodes.end(),

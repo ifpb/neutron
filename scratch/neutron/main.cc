@@ -25,13 +25,13 @@ int main(int argc, char *argv[])
 
   bool logging = false;
   bool tracing = false;
-  bool balanced = true;
+  std::string method = "hib";
   uint32_t seed = 42;
 
   CommandLine cmd(__FILE__);
   cmd.AddValue("logging", "Tell control applications to logging if true", logging);
   cmd.AddValue("tracing", "Tell control applications to tracing if true", tracing);
-  cmd.AddValue("balanced", "Tell control whether is a balanced policy", balanced);
+  cmd.AddValue("method", "Tell control what method use", method);
   cmd.AddValue("seed", "Set seed as an input parameter", seed);
 
   cmd.Parse(argc, argv);
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
     LogComponentEnable("Controller", LOG_LEVEL_INFO);
   }
 
-  cout << "Carregando YAML de entrada..." << endl;
+  cout << "Carregando YAML de entrada" << endl;
   YAML::Node input = YAML::LoadFile("./scratch/input.yaml");
   YAML::Node nodes = input["nodes"];
   YAML::Node apps = input["applications"];
@@ -85,8 +85,6 @@ int main(int argc, char *argv[])
         Ptr<CustomNode> node = CreateObject<CustomNode>();
         
         node->SetAttribute("Power", DoubleValue(power));
-        node->SetAttribute("InitialConsumption", DoubleValue(initialConsumption));
-        node->SetAttribute("CurrentConsumption", DoubleValue(currentConsumption));
         node->SetAttribute("CPU", DoubleValue(cpu));
         node->SetAttribute("Memory", DoubleValue(memory));
         node->SetAttribute("Transmission", DoubleValue(transmission));
@@ -106,45 +104,16 @@ int main(int argc, char *argv[])
   }
 
   controlNodes.Add(workerNodes);
-
-  MobilityHelper mobility;
-  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-
-  Ptr<ListPositionAllocator> nodesPositionAlloc = CreateObject<ListPositionAllocator>();
-  nodesPositionAlloc->Add(Vector(0.0, 0.0, 0.0));
-  nodesPositionAlloc->Add(Vector(50.0, 0.0, 0.0));
-  mobility.SetPositionAllocator(nodesPositionAlloc);
-  mobility.Install(controlNodes);
-
-  LrWpanHelper ethernet;
-  NetDeviceContainer controlDevices = ethernet.Install(controlNodes);
-  ethernet.CreateAssociatedPan(controlDevices, 10);
-
-  InternetStackHelper stack;
-  stack.SetIpv4StackInstall(false);
-  stack.Install(controlNodes);
-
-  SixLowPanHelper sixlowpan;
-  NetDeviceContainer sixlpDevices = sixlowpan.Install(controlDevices);
-
-  Ipv6AddressHelper address;
-  address.SetBase(Ipv6Address("2001:1::"), Ipv6Prefix(64));
-  Ipv6InterfaceContainer controlInterfaces = address.Assign(sixlpDevices);
   
   Ptr<Controller> controller = CreateObject<Controller>();
   controlNodes.Get(0)->AddApplication(controller);
   controller->SetStartTime(Seconds(1.0));
   controller->SetStopTime(Seconds(2*simulationTime));
 
-  UdpEchoServerHelper workerServer(7);
-  ApplicationContainer workerApps = workerServer.Install(workerNodes);
-  workerApps.Start(Seconds(1.0));
-  workerApps.Stop(Seconds(2*simulationTime));
-
   // Mandando controlNodes para que seja tratado sincronizado com os ids do banco que começam do 1 ao invés do 0
 
   controller->ResetDatabase();
-  controller->SetOptions(balanced);
+  controller->SetOptions(method);
   controller->AddWorkers(controlNodes);
 
   for (std::size_t i = 0; i < apps.size(); i++)
