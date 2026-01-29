@@ -5,7 +5,7 @@
 turns=$(seq 1 30)
 workdir=$PWD
 resultsdir="$workdir/experiments/results/"
-scenarios='30nodes'
+scenarios='30nodes 60nodes 90nodes 120nodes 150nodes 180nodes'
 
 for scenario in $scenarios; 
 do
@@ -25,5 +25,5 @@ do
         cp scratch/database.db $resultsdir/sqlite-$scenario-hib-$turn.db
 
     done
-    rm log-bal.tmp log-sat.tmp
+    rm log-bal.tmp log-sat.tmp log-hib.tmp
 done
