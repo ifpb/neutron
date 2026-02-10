@@ -60,10 +60,10 @@ for filename in files:
 
 for scenario in results:
 
-    output_path = os.path.join(output_dir, f"pu_used_{scenario}.csv")
+    output_path = os.path.join(output_dir, f"pused_{scenario}.csv")
 
     f = open(output_path, "w")
-    f.write("puBal,puSat,puHybrid\n")
+    f.write("puBal,puSat,puHib\n")
 
     for exec_id in sorted(results[scenario].keys()):
         bal = results[scenario][exec_id]["bal"]

@@ -69,6 +69,7 @@ for filename in files:
         percent[key] = round(counts[key] * 100.0 / total, 2)
 
     output_name = filename.replace(".db", ".csv")
+    output_name = output_name.replace("sqlite-", "pefficient_")
     output_path = os.path.join(output_dir, output_name)
     f = open(output_path, "w")
     f.write("total,pefficient,gefficient\n")
