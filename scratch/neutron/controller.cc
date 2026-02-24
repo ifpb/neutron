@@ -67,11 +67,15 @@ void Controller::AllocateApp(int app_id)
                   << "  Policy: " << application.POLICY << "\n";
     std::vector<uint32_t> candidateNodes;
     double totalPower = 0.0;
+    int totalNodes = 0.0;
     for (uint32_t i = 1; i < m_controlNodes.GetN(); ++i)
     {
         Ptr<CustomNode> node = DynamicCast<CustomNode>(m_controlNodes.Get(i));
         WRK worker = BuildWorkerFromNode(i);
-        totalPower += worker.POWER;
+        if (!node->GetApplications().empty()){
+            totalPower += worker.POWER;
+            totalNodes += 1;
+        }
         if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0)){
             candidateNodes.push_back(worker.ID);
         }
@@ -85,7 +89,7 @@ void Controller::AllocateApp(int app_id)
     }
 
     if (m_method == "hib") {
-        double avgBattery = totalPower / (m_controlNodes.GetN() - 1);
+        double avgBattery = totalPower / totalNodes;
 
         if (avgBattery < 60)
         {
@@ -96,7 +100,7 @@ void Controller::AllocateApp(int app_id)
             m_balanced = false;
         }
 
-        std::cout << "[Controller] Método=Hibrido | " << "Bateria média=" << avgBattery << "% | " << "Modo=" << (m_balanced ? "Balanceado" : "Saturado") << "at " << currentTime << "s" << std::endl;
+        std::cout << "[Controller] Método=Hibrido | " << "Bateria média=" << avgBattery << "% | " << "Modo=" << (m_balanced ? "Balanceado" : "Saturado") << " at " << currentTime << " s" << std::endl;
     }
 
     std::sort(candidateNodes.begin(), candidateNodes.end(),
