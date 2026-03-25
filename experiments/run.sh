@@ -4,7 +4,7 @@
 
 turns=$(seq 1 30)
 workdir=$PWD
-resultsdir="$workdir/experiments/results/"
+resultsdir="$workdir/experiments/data/"
 scenarios='30nodes 60nodes 90nodes 120nodes 150nodes 180nodes'
 
 for scenario in $scenarios; 

@@ -10,12 +10,12 @@ Controller::~Controller() = default;
 void Controller::SetOptions(std::string method)
 {
     m_method = method;
-    if (m_method == "bal"){
-        m_balanced = true;
-    }
-    else if (m_method == "hib" || m_method == "sat")
-    {
+    if (m_method == "sat"){
         m_balanced = false;
+    }
+    else if (m_method == "hib" || m_method == "bal")
+    {
+        m_balanced = true;
     }
 }
 
@@ -91,13 +91,13 @@ void Controller::AllocateApp(int app_id)
     if (m_method == "hib") {
         double avgBattery = totalPower / totalNodes;
 
-        if (avgBattery < 60)
+        if (avgBattery < 50)
         {
-            m_balanced = true;
+            m_balanced = false;
         }
         else
         {
-            m_balanced = false;
+            m_balanced = true;
         }
 
         std::cout << "[Controller] Método=Hibrido | " << "Bateria média=" << avgBattery << "% | " << "Modo=" << (m_balanced ? "Balanceado" : "Saturado") << " at " << currentTime << " s" << std::endl;
