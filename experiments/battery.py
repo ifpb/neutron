@@ -4,11 +4,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 input_dir = "data/"
+output_dir = "results/"
 
-# Estrutura: policy -> nodes -> timestamp -> lista de valores
 data = {}
 
 for filename in os.listdir(input_dir):
+
+    if not filename.endswith(".db"):
+        continue
+
     parts = filename.replace(".db", "").split("-")
 
     nodes = int(parts[1].replace("nodes", ""))
@@ -19,7 +23,12 @@ for filename in os.listdir(input_dir):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT TIMESTAMP, AVG_POWER FROM BATTERY_MONITORING ORDER BY TIMESTAMP")
+    cursor.execute("""
+        SELECT TIMESTAMP, AVG_POWER
+        FROM BATTERY_MONITORING
+        ORDER BY TIMESTAMP
+    """)
+
     rows = cursor.fetchall()
 
     conn.close()
@@ -36,48 +45,60 @@ for filename in os.listdir(input_dir):
 
         data[policy][nodes][timestamp].append(power)
 
-avg_data = {}
-
 for policy in data:
-    avg_data[policy] = {}
 
-    for nodes in data[policy]:
-        avg_data[policy][nodes] = []
+    plt.figure(figsize=(12, 6))
+
+    for nodes in sorted(data[policy].keys()):
+
+        times = [0]
+        means = [100.0]
+        ci_upper = [100.0]
+        ci_lower = [100.0]
 
         for timestamp in sorted(data[policy][nodes].keys()):
+
             values = data[policy][nodes][timestamp]
-            mean = sum(values) / len(values)
 
-            avg_data[policy][nodes].append((timestamp, mean))
+            mean = np.mean(values)
 
-for policy in avg_data:
+            std = np.std(values)
 
-    plt.figure()
+            ci = 1.96 * (std / np.sqrt(len(values)))
 
-    for nodes in sorted(avg_data[policy].keys()):
-        times = [0]          # ⬅️ começa com hora 0
-        power = [100.0]      # ⬅️ bateria cheia
-
-        for timestamp, mean in avg_data[policy][nodes]:
             hour = int(timestamp / 3600)
+            print(f"{policy} | {nodes} nós | hora {hour} | média={mean:.2f} | IC={ci:.4f}")
             times.append(hour)
-            power.append(mean)
+            means.append(mean)
 
-        plt.plot(times, power, marker='o', label=f"{nodes} nodes")
+            ci_upper.append(mean + ci)
+            ci_lower.append(mean - ci)
 
-        #for x, y in zip(times, power):
-        #    plt.text(x, y, f"{y:.1f}", fontsize=7, ha='center', va='bottom')
+        plt.plot(times, means, marker='o', label=f"{nodes} nodes")
+
+        plt.fill_between(
+            times,
+            ci_lower,
+            ci_upper,
+            alpha=0.4
+        )
 
     plt.xticks(range(0, 25))
 
     plt.xlabel("Tempo (horas)")
     plt.ylabel("Bateria média (%)")
-    plt.title(f"Evolução da bateria - {policy}")
+    plt.title(f"Evolução da bateria - {policy.upper()}")
+
     plt.legend()
+
     plt.grid()
+
     plt.ylim(0, 100)
-    plt.xlim(0, 25)
+    plt.xlim(0, 24)
+    
+    output_graph = os.path.join(output_dir, f"battery_ci_{policy}.png")
 
-
-    plt.savefig(f"battery_{policy}.png")
+    plt.savefig(output_graph)
     plt.close()
+
+    print(f"Gráfico gerado: {output_graph}")

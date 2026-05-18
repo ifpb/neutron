@@ -1,14 +1,23 @@
 import os
 import sqlite3
+import csv
+import matplotlib.pyplot as plt
+import numpy as np
 
 input_dir = "data/"
 output_dir = "results/"
+
+os.makedirs(output_dir, exist_ok=True)
 
 results = {}
 
 files = os.listdir(input_dir)
 
 for filename in files:
+
+    if not filename.endswith(".db"):
+        continue
+
     db = os.path.join(input_dir, filename)
 
     parts = filename.replace(".db", "").split("-")
@@ -17,34 +26,26 @@ for filename in files:
     policy = parts[2]
     exec_id = int(parts[3])
 
-    print(scenario, policy, exec_id)
+    print(f"Lendo: {scenario} | {policy} | execução {exec_id}")
 
     conn = sqlite3.connect(db)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT ID FROM WORKERS")
-    workers = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) FROM WORKERS")
+    total_workers = cursor.fetchone()[0]
 
-    total_workers = 0
-    for w in workers:
-        total_workers += 1
+    cursor.execute("SELECT COUNT(DISTINCT ID_WORKER) FROM WORKERS_APPLICATIONS")
+    used_count = cursor.fetchone()[0]
 
-    cursor.execute("SELECT ID_WORKER FROM WORKERS_APPLICATIONS")
-    allocations = cursor.fetchall()
-
-    used_workers = []
-    for alloc in allocations:
-        wid = alloc[0]
-        if wid not in used_workers:
-            used_workers.append(wid)
-
-    used_count = 0
-    for w in used_workers:
-        used_count += 1
+    conn.close()
 
     pused = round((used_count * 100.0) / total_workers, 2)
 
-    conn.close()
+    print(
+        f"  workers={total_workers} "
+        f"| usados={used_count} "
+        f"| taxa={pused}%"
+    )
 
     if scenario not in results:
         results[scenario] = {}
@@ -62,15 +63,74 @@ for scenario in results:
 
     output_path = os.path.join(output_dir, f"pused_{scenario}.csv")
 
-    f = open(output_path, "w")
-    f.write("puBal,puSat,puHib\n")
+    with open(output_path, "w", newline="") as f:
 
-    for exec_id in sorted(results[scenario].keys()):
-        bal = results[scenario][exec_id]["bal"]
-        sat = results[scenario][exec_id]["sat"]
-        hib = results[scenario][exec_id]["hib"]
+        writer = csv.writer(f)
+        writer.writerow(["puBal", "puSat", "puHib"])
 
-        line = f"{bal:.2f},{sat:.2f},{hib:.2f}\n"
-        f.write(line)
+        for exec_id in sorted(results[scenario].keys()):
 
-    f.close()
+            bal = results[scenario][exec_id]["bal"]
+            sat = results[scenario][exec_id]["sat"]
+            hib = results[scenario][exec_id]["hib"]
+
+            writer.writerow([bal, sat, hib])
+
+    print(f"CSV gerado: {output_path}")
+
+summary = {
+    "bal": {},
+    "sat": {},
+    "hib": {}
+}
+
+for scenario in results:
+
+    for policy in ["bal", "sat", "hib"]:
+
+        values = []
+
+        for exec_id in results[scenario]:
+
+            value = results[scenario][exec_id][policy]
+
+            if value is not None:
+                values.append(value)
+
+        avg = sum(values) / len(values)
+
+        nodes = int(scenario.replace("nodes", ""))
+
+        summary[policy][nodes] = avg
+
+        print(f"MÉDIA | {scenario} | {policy} = {avg:.2f}%")
+
+for policy in ["bal", "sat", "hib"]:
+
+    plt.figure(figsize=(8, 5))
+
+    x = sorted(summary[policy].keys())
+    y = [summary[policy][nodes] for nodes in x]
+
+    plt.plot(x, y, marker='o')
+
+    for xi, yi in zip(x, y):
+        plt.text(xi, yi, f"{yi:.2f}", fontsize=10,
+                 ha='center', va='bottom')
+
+    plt.xlabel("Número de Nós")
+    plt.ylabel("% de Utilização Histórica")
+    plt.title(f"Taxa de Utilização - {policy.upper()}")
+
+    plt.ylim(0, 100)
+
+    plt.xticks([60, 120, 180, 240, 300])
+
+    plt.grid(True)
+
+    output_graph = os.path.join(output_dir, f"pused_{policy}.png")
+
+    plt.savefig(output_graph)
+    plt.close()
+
+    print(f"Gráfico gerado: {output_graph}")

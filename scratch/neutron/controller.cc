@@ -10,12 +10,12 @@ Controller::~Controller() = default;
 void Controller::SetOptions(std::string method)
 {
     m_method = method;
-    if (m_method == "sat"){
-        m_balanced = false;
-    }
-    else if (m_method == "hib" || m_method == "bal")
-    {
+    if (m_method == "bal"){
         m_balanced = true;
+    }
+    else if (m_method == "hib" || m_method == "sat")
+    {
+        m_balanced = false;
     }
 }
 
@@ -76,7 +76,13 @@ void Controller::AllocateApp(int app_id)
             totalPower += worker.POWER;
             totalNodes += 1;
         }
-        if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (worker.POWER > 0)){
+        bool enoughBattery = false;
+        if (worker.CURRENT_CONSUMPTION > 0)
+        {
+            double remaining_time = worker.POWER / worker.CURRENT_CONSUMPTION;
+            enoughBattery = (remaining_time >= 14400.0);
+        }
+        if ((worker.CPU > application.CPU) && (worker.MEMORY > application.MEMORY) && (worker.STORAGE > application.STORAGE) && (enoughBattery)){
             candidateNodes.push_back(worker.ID);
         }
     }
@@ -93,11 +99,11 @@ void Controller::AllocateApp(int app_id)
 
         if (avgBattery < 50)
         {
-            m_balanced = false;
+            m_balanced = true;
         }
         else
         {
-            m_balanced = true;
+            m_balanced = false;
         }
 
         std::cout << "[Controller] Método=Hibrido | " << "Bateria média=" << avgBattery << "% | " << "Modo=" << (m_balanced ? "Balanceado" : "Saturado") << " at " << currentTime << " s" << std::endl;
@@ -200,6 +206,12 @@ void Controller::DeallocateApp(int idApplication, int idWorker, std::string fini
     }
     db.RemoveWorkerApplication(idWorker, idApplication, currentTime);
     db.MarkApplicationStatus(idApplication, finish, currentTime);
+    std::vector<int> appIds = db.GetApplicationsToReallocate();
+    for (int appId : appIds)
+    {
+        std::cout << "Application with ID " << appId << " will be reallocated " << std::endl;
+        AllocateApp(appId);
+    }
 }
 
 void Controller::OutOfPower(int idWorker)
